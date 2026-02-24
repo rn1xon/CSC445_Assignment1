@@ -2,80 +2,103 @@ package Client;
 
 import java.io.*;
 import java.net.*;
+import java.util.ArrayList;
+
+class Measurement {
+    String type;
+    int size;
+    double value;
+
+    Measurement(String type, int size, double value) {
+        this.type = type;
+        this.size = size;
+        this.value = value;
+    }
+}
 
 public class TcpClient {
-    private static final String SERVER_HOST = "altair.cs.oswego.edu"; 
+    private static final String SERVER_HOST = "moxie.cs.oswego.edu"; 
     private static final int PORT = 26971;
     private static final long INITIAL_KEY = 123456789L;
+    private static final int SAMPLES = 30; // 30 iterations
+
+    private static ArrayList<Measurement> results = new ArrayList<>();
 
     public static void main(String[] args) throws IOException {
-        Socket socket = new Socket(SERVER_HOST, PORT);
-        socket.setTcpNoDelay(true);
-        System.out.println("Connected to server at " + SERVER_HOST + ":" + PORT);
+        try (Socket socket = new Socket(SERVER_HOST, PORT)) {
+            socket.setTcpNoDelay(true);
+            DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+            DataInputStream in = new DataInputStream(socket.getInputStream());
 
-        DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-        DataInputStream in = new DataInputStream(socket.getInputStream());
+            System.out.println("--- Starting TCP Tests (n=" + SAMPLES + ") ---");
 
-        System.out.println("\n--- Starting RTT Tests ---");
-        int[] rttSizes = {8, 64, 256, 512};
-        for (int size : rttSizes) {
-            measureRTT(size, in, out);
+            // Run Latency Tests
+            int[] rttSizes = {8, 64, 256, 512};
+            for (int s : rttSizes) {
+                double totalMs = 0;
+                for (int i = 0; i < SAMPLES; i++) {
+                    totalMs += measureRTT(s, in, out);
+                }
+                double avgMs = totalMs / SAMPLES;
+                results.add(new Measurement("RTT", s, avgMs));
+                System.out.printf("Avg RTT for %db: %.4f ms%n", s, avgMs);
+            }
+
+            // Run Throughput Tests
+            int[][] tpTests = {{1024, 1024}, {2048, 512}, {4096, 256}};
+            for (int[] t : tpTests) {
+                double totalBps = 0;
+                for (int i = 0; i < SAMPLES; i++) {
+                    totalBps += measureThroughput(t[0], t[1], in, out);
+                }
+                double avgBps = totalBps / SAMPLES;
+                results.add(new Measurement("Throughput", t[1], avgBps));
+                System.out.printf("Avg Throughput for %dx%db: %.2f bps%n", t[0], t[1], avgBps);
+            }
+
+            printChartData();
+        } catch (ConnectException e) {
+            System.out.println("Could not connect! Check your Server and SSH tunnel.");
         }
-
-        System.out.println("\n--- Starting Throughput Tests ---");
-        measureThroughput(1024, 1024, in, out);
-        measureThroughput(2048, 512, in, out);
-        measureThroughput(4096, 256, in, out);
-
-        socket.close();
-        System.out.println("Tests complete. Disconnected.");
     }
 
-    private static void measureRTT(int size, DataInputStream in, DataOutputStream out) throws IOException {
-        String payload = "RTT" + generatePadding(size - 3);
-        System.out.println("\n[Client] Sending " + size + " bytes: " + payload);
+    private static void printChartData() {
+        System.out.println("\n--- COPY DATA FOR CHART.JS ---");
+        System.out.print("TCP RTT Labels: [");
+        results.stream().filter(m -> m.type.equals("RTT")).forEach(m -> System.out.print(m.size + ", "));
+        System.out.print("]\nTCP RTT Data: [");
+        results.stream().filter(m -> m.type.equals("RTT")).forEach(m -> System.out.print(m.value + ", "));
         
-        byte[] encrypted = cipher(payload.getBytes(), INITIAL_KEY);
+        System.out.print("]\n\nTCP Throughput Labels: [");
+        results.stream().filter(m -> m.type.equals("Throughput")).forEach(m -> System.out.print(m.size + ", "));
+        System.out.print("]\nTCP Throughput Data: [");
+        // Dividing by 1,000,000 to convert to Mbps for a cleaner graph
+        results.stream().filter(m -> m.type.equals("Throughput")).forEach(m -> System.out.print((m.value / 1000000.0) + ", "));
+        System.out.println("]\n------------------------------");
+    }
 
+    private static double measureRTT(int size, DataInputStream in, DataOutputStream out) throws IOException {
+        String payload = "A".repeat(size);
+        byte[] encrypted = cipher(payload.getBytes(), INITIAL_KEY);
         long start = System.nanoTime();
         out.writeInt(encrypted.length);
         out.write(encrypted);
-
-        int responseLen = in.readInt();
-        byte[] responseBytes = new byte[responseLen];
-        in.readFully(responseBytes);
-        long end = System.nanoTime();
-
-        byte[] decryptedResponse = cipher(responseBytes, INITIAL_KEY);
-        System.out.println("[Client] Received " + responseLen + " bytes: " + new String(decryptedResponse));
-        System.out.println("-> RTT for " + size + " bytes: " + (end - start) / 1_000_000.0 + " ms");
+        in.readInt();
+        in.readFully(new byte[size]);
+        return (System.nanoTime() - start) / 1_000_000.0;
     }
 
-    private static void measureThroughput(int numMessages, int msgSize, DataInputStream in, DataOutputStream out) throws IOException {
-        String testData = "THROUGHPUT" + generatePadding(msgSize - 10);
-        byte[] encrypted = cipher(testData.getBytes(), INITIAL_KEY);
-
-        System.out.println("Running throughput test: " + numMessages + " messages of " + msgSize + " bytes...");
+    private static double measureThroughput(int count, int size, DataInputStream in, DataOutputStream out) throws IOException {
+        byte[] encrypted = cipher("THROUGHPUT".repeat(size).substring(0, size).getBytes(), INITIAL_KEY);
         long start = System.nanoTime();
-        for (int i = 0; i < numMessages; i++) {
+        for (int i = 0; i < count; i++) {
             out.writeInt(encrypted.length);
             out.write(encrypted);
-
-            int ackLen = in.readInt();
-            byte[] ackBytes = new byte[ackLen];
-            in.readFully(ackBytes);
+            in.readInt();
+            in.readFully(new byte[8]);
         }
-        long end = System.nanoTime();
-
-        double bits = numMessages * msgSize * 8.0;
-        double seconds = (end - start) / 1_000_000_000.0;
-        System.out.printf("-> Throughput for %d x %dB: %.2f bps%n", numMessages, msgSize, bits / seconds);
-    }
-
-    private static String generatePadding(int length) {
-        StringBuilder sb = new StringBuilder();
-        while (sb.length() < length) sb.append("A");
-        return sb.toString();
+        double seconds = (System.nanoTime() - start) / 1_000_000_000.0;
+        return (count * size * 8.0) / seconds;
     }
 
     private static byte[] cipher(byte[] input, long key) {
@@ -83,22 +106,17 @@ public class TcpClient {
         for (int i = 0; i < input.length; i += 8) {
             long block = 0;
             int chunk = Math.min(8, input.length - i);
-            for (int j = 0; j < chunk; j++) {
-                block |= ((long) input[i + j] & 0xFF) << (j * 8);
-            }
+            for (int j = 0; j < chunk; j++) block |= ((long) input[i + j] & 0xFF) << (j * 8);
             long ciphered = block ^ key;
             key = xorShift(key);
-            for (int j = 0; j < chunk; j++) {
-                output[i + j] = (byte) ((ciphered >> (j * 8)) & 0xFF);
-            }
+            for (int j = 0; j < chunk; j++) output[i + j] = (byte) ((ciphered >> (j * 8)) & 0xFF);
         }
         return output;
     }
 
     private static long xorShift(long r) {
-        r ^= r << 13;
-        r ^= r >>> 7;
-        r ^= r << 17;
-        return r;
+        r ^= r << 13; 
+        r ^= r >>> 7; 
+        r ^= r << 17; return r;
     }
 }

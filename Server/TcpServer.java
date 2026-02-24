@@ -6,7 +6,8 @@ public class TcpServer {
     private static final long INITIAL_KEY = 123456789L;
 
     public static void main(String[] args) throws IOException {
-        ServerSocket serverSocket = new ServerSocket(PORT);
+        // Bind explicitly to all interfaces (0.0.0.0) so remote hosts can connect
+        ServerSocket serverSocket = new ServerSocket(PORT, 50, InetAddress.getByName("0.0.0.0"));
         System.out.println("TCP Server started on port " + PORT + ". Waiting for client...");
 
         while (true) {

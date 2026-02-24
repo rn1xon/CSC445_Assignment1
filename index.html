@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CSC445 Network Performance</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 40px; background: #f4f4f9; }
+        .section { background: white; padding: 20px; border-radius: 8px; margin-bottom: 40px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 350px;}
+        h2 { border-bottom: 2px solid #3498db; padding-bottom: 10px; color: #2c3e50; }
+    </style>
+</head>
+<body>
+    <h1>Network Performance Report: 3 Connection Pairs</h1>
+
+    <div class="section">
+        <h2>Pair 1: PC to CS Server (Ethernet ↔ Altair)</h2>
+        <div class="chart-grid">
+            <canvas id="rtt1"></canvas>
+            <canvas id="tp1"></canvas>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Pair 2: Laptop to CS Server (Wireless ↔ Altair)</h2>
+        <div class="chart-grid">
+            <canvas id="rtt2"></canvas>
+            <canvas id="tp2"></canvas>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Pair 3: Internal CS Network (Altair ↔ Moxie)</h2>
+        <div class="chart-grid">
+            <canvas id="rtt3"></canvas>
+            <canvas id="tp3"></canvas>
+        </div>
+    </div>
+
+    <script>
+        function makeCharts(pairId, rttDataTCP, rttDataUDP, tpDataTCP, tpDataUDP) {
+
+    // RTT LINE CHART
+    new Chart(document.getElementById('rtt' + pairId), {
+        type: 'line',
+        data: {
+            labels: [8, 64, 256, 512],
+            datasets: [
+                { label: 'TCP RTT (ms)', data: rttDataTCP, borderColor: 'blue', pointBackgroundColor: 'blue' },
+                { label: 'UDP RTT (ms)', data: rttDataUDP, borderColor: 'red', pointBackgroundColor: 'red' }
+            ]
+        },
+        options: {
+            plugins: {
+                datalabels: {
+                    anchor: 'end',
+                    align: 'top',
+                    color: '#000',
+                    font: { weight: 'bold', size: 12 },
+                    formatter: v => v.toFixed(2)
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Message Size (bytes)',
+                        font: { weight: 'bold', size: 14 }
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'RTT (ms)',
+                        font: { weight: 'bold', size: 14 }
+                    }
+                }
+            }
+        },
+        plugins: [ChartDataLabels]
+    });
+
+    // THROUGHPUT BAR CHART
+    new Chart(document.getElementById('tp' + pairId), {
+        type: 'bar',
+        data: {
+            labels: [1024, 512, 256],
+            datasets: [
+                { label: 'TCP Mbps', data: tpDataTCP, backgroundColor: 'rgba(0, 0, 255, 0.5)' },
+                { label: 'UDP Mbps', data: tpDataUDP, backgroundColor: 'rgba(255, 0, 0, 0.5)' }
+            ]
+        },
+        options: {
+            plugins: {
+                datalabels: {
+                    anchor: 'center',
+                    align: 'center',
+                    color: '#000',
+                    font: { weight: 'bold', size: 13 },
+                    formatter: v => v.toFixed(2)
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Message Size (bytes)',
+                        font: { weight: 'bold', size: 14 }
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Throughput (Mbps)',
+                        font: { weight: 'bold', size: 14 }
+                    }
+                }
+            }
+        },
+        plugins: [ChartDataLabels]
+    });
+}
+
+
+        // DATA
+        makeCharts(1,
+            [1.2525666666666666, 1.1297766666666662, 1.1189166666666668, 1.2453766666666666],  // TCP RTT
+            [1.34402, 1.5217933333333336, 1.1411233333333335, 1.2530666666666666],             // UDP RTT
+            [7.57210970866346, 4.337699425191499, 2.232554776002741],       // TCP Throughput
+            [7.791712401716364, 4.71666266903993, 2.6725702731630476]       // UDP Throughput
+        );
+
+        makeCharts(2,
+            [15.2, 18.1, 22.4, 25.0],
+            [14.0, 16.5, 20.1, 22.0],
+            [45.2, 30.1, 25.5],
+            [50.1, 35.2, 28.4]
+        );
+
+        makeCharts(3,
+            [0,0,0,0],
+            [0,0,0,0],
+            [0,0,0],
+            [0,0,0]
+        );
+    </script>
+</body>
+</html>

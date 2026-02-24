@@ -9,7 +9,7 @@ public class UdpServer {
         DatagramSocket socket = new DatagramSocket(PORT);
         System.out.println("UDP Server started on port " + PORT);
 
-        byte[] receiveBuffer = new byte[2048];
+        byte[] receiveBuffer = new byte[4096]; // Large enough for all tests
 
         while (true) {
             DatagramPacket receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
@@ -25,8 +25,7 @@ public class UdpServer {
             if (message.startsWith("THROUGHPUT")) {
                 responseBytes = cipher("ACK8BYTE".getBytes(), INITIAL_KEY);
             } else {
-                System.out.println("Server received RTT payload: " + message);
-                responseBytes = cipher(decryptedData, INITIAL_KEY);
+                responseBytes = cipher(decryptedData, INITIAL_KEY); // Normal Echo
             }
 
             DatagramPacket sendPacket = new DatagramPacket(
@@ -42,22 +41,18 @@ public class UdpServer {
         for (int i = 0; i < input.length; i += 8) {
             long block = 0;
             int chunk = Math.min(8, input.length - i);
-            for (int j = 0; j < chunk; j++) {
-                block |= ((long) input[i + j] & 0xFF) << (j * 8);
-            }
+            for (int j = 0; j < chunk; j++) block |= ((long) input[i + j] & 0xFF) << (j * 8);
             long ciphered = block ^ key;
             key = xorShift(key);
-            for (int j = 0; j < chunk; j++) {
-                output[i + j] = (byte) ((ciphered >> (j * 8)) & 0xFF);
-            }
+            for (int j = 0; j < chunk; j++) output[i + j] = (byte) ((ciphered >> (j * 8)) & 0xFF);
         }
         return output;
     }
 
     private static long xorShift(long r) {
-        r ^= r << 13;
-        r ^= r >>> 7;
-        r ^= r << 17;
+        r ^= r << 13; 
+        r ^= r >>> 7; 
+        r ^= r << 17; 
         return r;
     }
 }
