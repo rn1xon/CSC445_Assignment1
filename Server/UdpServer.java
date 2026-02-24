@@ -2,7 +2,7 @@ import java.io.*;
 import java.net.*;
 
 public class UdpServer {
-    private static final int PORT = 27003;
+    private static final int PORT = 26971;
     private static final long INITIAL_KEY = 123456789L;
 
     public static void main(String[] args) throws IOException {
