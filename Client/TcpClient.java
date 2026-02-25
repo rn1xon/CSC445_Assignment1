@@ -58,7 +58,7 @@ public class TcpClient {
 
             printChartData();
         } catch (ConnectException e) {
-            System.out.println("Could not connect! Check your Server and SSH tunnel.");
+            System.out.println("Could not connect! Check your Server.");
         }
     }
 
